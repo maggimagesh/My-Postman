@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self'; connect-src 'self'">
+<title>My Postmaster</title>
+<link rel="icon" type="image/png" href="/assets/icons/32.png">
+<link rel="stylesheet" href="/node_modules/monaco-editor/min/vs/editor/editor.main.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="/assets/icons/64.png" alt="" title="My Postmaster"><span class="bt">My Postmaster</span></div>
+  <button id="btnNew" class="primary" title="New (Ctrl+N)"></button>
+  <button id="btnImport" title="Import (Ctrl+O)"></button>
+  <span class="sp"></span>
+  <div class="searchbox" id="searchbox" role="button" tabindex="0" title="Search (Ctrl+K)"></div>
+  <span class="sp"></span>
+  <div class="envpick"><select id="envSel" aria-label="Active environment" title="Active environment"></select><button class="ghost" id="envEye" title="Environment quick look"></button></div>
+  <button class="ghost" id="btnSettings" title="Settings (Ctrl+,)"></button>
+  <button class="ghost" id="btnAi" title="Claude AI assistant"></button>
+</header>
+<div class="main" id="main">
+  <nav class="rail" id="rail" aria-label="Sidebar sections"></nav>
+  <aside class="side" id="side">
+    <div class="side-head"><span id="sideTitle"></span><span class="sp"></span><button class="ghost" id="sideAdd"></button><button class="ghost" id="sideMore"></button></div>
+    <div class="side-filter"><input id="filter" placeholder="Filter  (Ctrl+F)" aria-label="Filter sidebar"></div>
+    <div class="tree" id="tree" tabindex="0" role="tree"></div>
+  </aside>
+  <div class="resizer" id="sideResizer"></div>
+  <section class="center">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="view" id="view"></div>
+  </section>
+  <aside class="ai" id="ai"></aside>
+</div>
+<div class="console" id="console"></div>
+<footer class="status" id="status"></footer>
+<div class="findbar" id="findbar"><input id="findInput" placeholder="Find in page" style="width:220px"><span id="findCount" class="dim"></span><button class="ghost" id="findPrev">↑</button><button class="ghost" id="findNext">↓</button><button class="ghost" id="findClose">✕</button></div>
+<div class="toast-wrap" id="toasts"></div>
+<script src="/node_modules/monaco-editor/min/vs/loader.js"></script>
+<script src="dynamic.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

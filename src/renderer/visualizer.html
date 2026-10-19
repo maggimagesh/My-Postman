@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>body{font:13px system-ui,sans-serif;margin:12px;color:#111;background:#fff}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px}</style>
+<script src="app://ui/node_modules/handlebars/dist/handlebars.min.js"></script>
+</head><body><div id="out">Waiting for data…</div>
+<script>
+// Runs in an opaque-origin sandbox: renders pm.visualizer.set(template, data) output.
+let data = null;
+window.pm = { getData: cb => cb(null, data) };
+window.addEventListener('message', e => {
+  const m = e.data || {};
+  data = m.data;
+  try {
+    const html = Handlebars.compile(m.template || '')(m.data || {});
+    document.open(); document.write(html); document.close();
+    window.pm = { getData: cb => cb(null, data) };
+  } catch (err) { document.getElementById('out').textContent = 'Visualizer error: ' + err.message; }
+});
+</script></body></html>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="#0d9488"/>
+  <!-- envelope -->
+  <rect x="72" y="196" width="280" height="196" rx="24" fill="#fff"/>
+  <path d="M84 212l128 96 128-96" fill="none" stroke="#0d9488" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- send arrow, top-right -->
+  <path d="M330 96h86v86" fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M416 96l-96 96" stroke="#fff" stroke-width="30" stroke-linecap="round"/>
+  <!-- AI spark, bottom-right -->
+  <path d="M408 300l18 46 46 18-46 18-18 46-18-46-46-18 46-18z" fill="#1c1c1c" stroke="#fff" stroke-width="12" stroke-linejoin="round"/>
+</svg>

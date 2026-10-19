@@ -1,0 +1,7 @@
+node_modules/
+build/
+*.deb
+bak/
+design-src/
+*.zip
+*.tgz
