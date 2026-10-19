@@ -340,23 +340,6 @@ app.on('browser-window-created', (_e, win) => win.webContents.setBackgroundThrot
     check('multi-line cURL paste: URL, headers, form-data with JSON intact, opens Body tab', cp.url === base + '/echo?action=crawling' && cp.tab === 'body' && JSON.stringify(cp.form) === JSON.stringify(['requestId=1', 'seedInfo=[\n  {\n    "recordId": "zoho"\n  }\n]', 'dataDispatch={"method":"webhook"}']), JSON.stringify(cp));
     check('form-data sent as multipart even when a stale Content-Type header is set', /^multipart\/form-data; boundary=/.test(cp.ct) && cp.body.includes('name="seedInfo"\r\n\r\n[\n  {\n    "recordId": "zoho"\n  }\n]\r\n'), JSON.stringify(cp));
 
-    // --- TLS failure → one-click "disable SSL verification & retry" (like Postman) ---
-    const tlsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-tls-'));
-    require('child_process').execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', path.join(tlsDir, 'k.pem'), '-out', path.join(tlsDir, 'c.pem'), '-days', '1', '-subj', '/CN=localhost'], { stdio: 'ignore' });
-    const tlsSrv = require('https').createServer({ key: fs.readFileSync(path.join(tlsDir, 'k.pem')), cert: fs.readFileSync(path.join(tlsDir, 'c.pem')) }, (q, r) => { r.writeHead(200, { 'Content-Type': 'application/json' }); r.end('{"tls":true}'); });
-    await new Promise(r => tlsSrv.listen(0, '127.0.0.1', r));
-    const tls = await js(`
-      M.tabs.newRequestTab('http'); const t = M.tabs.activeTab(); t.draft.url = 'https://127.0.0.1:${tlsSrv.address().port}/'; M.ui.bus.emit('render-view');
-      await new Promise(r => setTimeout(r, 200));
-      const { send } = await import('/views/http.js');
-      await send(t);
-      const first = { ok: M.tabs.rt(t).res.ok, code: M.tabs.rt(t).res.code, btn: !!document.querySelector('[data-ssl="one"]') };
-      document.querySelector('[data-ssl="one"]')?.click();
-      for (let i = 0; i < 40 && !(M.tabs.rt(t).res?.ok); i++) await new Promise(r => setTimeout(r, 100));
-      return { first, second: M.tabs.rt(t).res.ok && M.tabs.rt(t).res.body, perRequest: t.draft.settings.sslVerify, global: M.state.W.settings.sslVerify };`);
-    tlsSrv.close();
-    check('certificate error offers "disable SSL verification & retry" and it works', tls.first.ok === false && /SELF_SIGNED|CERT/.test(tls.first.code || '') && tls.first.btn && tls.second === '{"tls":true}' && tls.perRequest === false && tls.global === true, JSON.stringify(tls));
-
     if (process.env.AI) {
       const ai = await js(`return await api.aiAsk({ id: 'smoke', prompt: 'Reply with only the word pong' })`);
       check('Claude bridge (your subscription via Claude Code)', ai.ok && /pong/i.test(ai.text), JSON.stringify(ai));

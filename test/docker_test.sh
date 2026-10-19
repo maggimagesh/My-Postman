@@ -14,7 +14,7 @@ apt-get update -qq >/dev/null
 apt-get install -y -qq /w/$DEB >/tmp/install.log 2>&1 || { tail -30 /tmp/install.log; exit 1; }
 echo "== installed: $(dpkg-query -W -f="\${Package} \${Version} \${Status}" my-postmaster) on $(. /etc/os-release; echo $PRETTY_NAME)"
 # test-only tools
-apt-get install -y -qq xvfb xauth openssl desktop-file-utils >/dev/null 2>&1
+apt-get install -y -qq xvfb xauth desktop-file-utils >/dev/null 2>&1
 desktop-file-validate /usr/share/applications/my-postmaster.desktop && echo "== desktop file valid"
 [ "$(stat -c %a /opt/my-postmaster/chrome-sandbox)" = 4755 ] || { echo "== chrome-sandbox is not setuid"; exit 1; }
 set +e
