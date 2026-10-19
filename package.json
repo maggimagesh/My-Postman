@@ -5,7 +5,8 @@
   "scripts": {
     "start": "electron .",
     "test": "electron test/smoke-test.js",
-    "deb": "./build-deb.sh"
+    "deb": "./build-deb.sh",
+    "test:docker": "for v in 18.04 20.04 22.04 24.04; do test/docker_test.sh $v || exit 1; done"
   },
   "keywords": [],
   "author": "",

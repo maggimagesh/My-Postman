@@ -90,10 +90,15 @@ You can import from a file, a link, pasted text, or by dropping files onto the w
 
 ## Installing
 
+### Supported systems
+- **Ubuntu 18.04 or newer** (18.04, 20.04, 22.04 and 24.04 are tested on every change), or an Ubuntu-based system such as Linux Mint, Pop!_OS or Zorin OS.
+- 64-bit Intel or AMD processor (amd64).
+
 ### From a .deb package (Ubuntu / Debian)
 ```bash
-sudo dpkg -i my-postmaster_<version>_amd64.deb
+sudo apt install ./my-postmaster_<version>_amd64.deb
 ```
+`apt` also installs the few system libraries the app needs.
 Then launch **My Postmaster** from your applications menu, or run `my-postmaster` in a terminal.
 
 ### Running from source
@@ -117,6 +122,14 @@ This creates `my-postmaster_<version>_amd64.deb` in the project folder.
 npm test
 ```
 This starts the app against local test servers for every protocol and checks the results.
+
+To check the `.deb` itself on every supported Ubuntu version, build it and run the tests inside clean Docker containers:
+```bash
+npm run deb
+npm run test:docker            # Ubuntu 18.04, 20.04, 22.04 and 24.04
+test/docker_test.sh 22.04      # or a single version
+```
+Each run installs the package with `apt` in a fresh `ubuntu:<version>` container, checks the menu entry, starts the app, runs the full test suite as a normal user against the installed app, and then removes the package. The same checks run automatically on GitHub for every push and pull request.
 
 ---
 

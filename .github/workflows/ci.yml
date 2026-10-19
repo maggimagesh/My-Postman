@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ['18.04', '20.04', '22.04', '24.04']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: ./build-deb.sh
+      - name: Install the .deb in Ubuntu ${{ matrix.ubuntu }} and run all tests as a normal user
+        run: test/docker_test.sh ${{ matrix.ubuntu }}
+      - uses: actions/upload-artifact@v4
+        if: matrix.ubuntu == '24.04'
+        with:
+          name: my-postmaster-deb
+          path: my-postmaster_*_amd64.deb

@@ -36,7 +36,7 @@ Comment=Test HTTP, GraphQL, WebSocket, Socket.IO, SSE, MQTT and gRPC APIs, with 
 Exec=/opt/my-postmaster/my-postmaster %U
 Icon=my-postmaster
 Type=Application
-Categories=Development;Network;
+Categories=Development;WebDevelopment;
 Keywords=api;rest;http;graphql;websocket;grpc;mqtt;postman;
 StartupWMClass=My Postmaster
 D
@@ -48,7 +48,7 @@ Version: $VER
 Architecture: amd64
 Maintainer: Magesh <maggimagesh995@gmail.com>
 Installed-Size: $SIZE
-Depends: libgtk-3-0, libnss3, libxss1, libasound2 | libasound2t64, libgbm1
+Depends: libgtk-3-0, libnss3, libxss1, libasound2t64 | libasound2, libgbm1
 Section: devel
 Priority: optional
 Description: My Postmaster - API client with Claude AI
