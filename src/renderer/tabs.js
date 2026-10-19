@@ -144,9 +144,9 @@ export function renderTabs() {
   el.replaceChildren();
   T.tabs.forEach((t, i) => {
     const d = t.draft || {};
-    const badge = t.kind === 'request' ? `<span class="m ${d.kind === 'http' || !d.kind ? d.method : 'k-' + d.kind}">${esc(kindBadge(d))}</span>`
+    const badge = t.kind === 'request' ? `<span class="mdot ${d.kind === 'http' || !d.kind ? esc(d.method) : 'k-' + d.kind}" title="${esc(kindBadge(d))}"></span>`
       : t.kind === 'container' ? icon(d.kind === 'collection' ? 'collections' : 'folder') : t.kind === 'env' ? icon('env') : t.kind === 'runner' ? icon('play') : icon('file');
-    const tab = h(`<div class="tab ${i === T.active ? 'on' : ''}" role="tab" aria-selected="${i === T.active}" draggable="true" title="${esc(tabTitle(t))}">${badge}<span class="t">${esc(tabTitle(t))}</span>${t.dirty ? '<span class="dot" title="Unsaved changes"></span>' : ''}<button class="ghost x" aria-label="Close tab">${icon('x')}</button></div>`);
+    const tab = h(`<div class="tab ${i === T.active ? 'on' : ''}" role="tab" aria-selected="${i === T.active}" draggable="true" title="${esc((t.kind === 'request' ? kindBadge(d) + ' ' : '') + tabTitle(t))}">${badge}<span class="t">${esc(tabTitle(t))}</span>${t.dirty ? '<span class="dot" title="Unsaved changes"></span>' : ''}<button class="ghost x" aria-label="Close tab" title="Put away">${icon('x')}</button></div>`);
     tab.onclick = () => activate(i);
     tab.onauxclick = e => { if (e.button === 1) { e.preventDefault(); closeTab(i); } };
     tab.querySelector('.x').onclick = e => { e.stopPropagation(); closeTab(i); };

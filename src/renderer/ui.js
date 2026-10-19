@@ -34,7 +34,7 @@ const P = {
   refresh: 'M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4', check: 'M5 12l5 5L20 7', send: 'M4 12l16-8-6 16-2-6z',
   sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
   moon: 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z', globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18', sidebar: 'M4 4h16v16H4zM9 4v16',
-  bolt: 'M13 2L4 14h7l-1 8 9-12h-7z', plug: 'M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4', window: 'M3 5h18v14H3zM3 9h18',
+  bolt: 'M13 2L4 14h7l-1 8 9-12h-7z', plug: 'M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4', window: 'M3 5h18v14H3zM3 9h18', monitor: 'M3 4h18v12H3zM8 20h8M12 16v4', arrowR: 'M5 12h14M13 6l6 6-6 6',
   wand: 'M15 4V2M15 10V8M11 6h2M17 6h2M4 20L14 10', filter: 'M4 5h16l-6 8v6l-4-2v-4z', code: 'M8 7l-5 5 5 5M16 7l5 5-5 5',
 };
 export const icon = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[n] || P.more}"/></svg>`;

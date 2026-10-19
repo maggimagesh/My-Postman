@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer, webFrame } = require('electron');
 const invoke = ch => (...a) => ipcRenderer.invoke(ch, ...a);
 const channels = ['ws:load', 'ws:save', 'session:save', 'http:send', 'http:cancel', 'oauth2:token', 'rt:connect', 'rt:call',
   'grpc:load', 'grpc:invoke', 'grpc:write', 'grpc:end', 'grpc:cancel', 'mock:start', 'mock:stop', 'mock:running',
-  'cookies:list', 'cookies:upsert', 'cookies:remove', 'cookies:clear', 'ai:status', 'ai:ask', 'ai:cancel', 'appimport:sources', 'appimport:read',
+  'cookies:list', 'cookies:upsert', 'cookies:remove', 'cookies:clear', 'ai:status', 'ai:ask', 'ai:cancel', 'appimport:sources', 'appimport:read', 'win:ctl',
   'dialog:open', 'dialog:save', 'file:read', 'app:newWindow', 'app:devtools', 'app:find', 'app:openExternal'];
 const api = {};
 for (const ch of channels) api[ch.replace(/:(\w)/, (_, c) => c.toUpperCase())] = invoke(ch); // 'http:send' -> api.httpSend

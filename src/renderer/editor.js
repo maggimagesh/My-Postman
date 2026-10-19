@@ -34,8 +34,8 @@ export function loadMonaco() {
     window.require.config({ paths: { vs: '/node_modules/monaco-editor/min/vs' } });
     window.require(['vs/editor/editor.main'], () => {
       const m = window.monaco;
-      m.editor.defineTheme('mp-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'string.key.json', foreground: '7dd3fc' }, { token: 'string.value.json', foreground: '86efac' }, { token: 'number', foreground: 'fcd34d' }, { token: 'keyword', foreground: '5eead4' }], colors: { 'editor.background': '#141820', 'editorGutter.background': '#141820', 'editor.lineHighlightBackground': '#1b202b', 'editorLineNumber.foreground': '#4b5568', 'editor.selectionBackground': '#14b8a640', 'editorWidget.background': '#1f2430', 'focusBorder': '#14b8a6' } });
-      m.editor.defineTheme('mp-light', { base: 'vs', inherit: true, rules: [{ token: 'string.key.json', foreground: '0369a1' }, { token: 'string.value.json', foreground: '15803d' }, { token: 'keyword', foreground: '0f766e' }], colors: { 'editor.background': '#fbfcfd', 'editorGutter.background': '#fbfcfd', 'editor.lineHighlightBackground': '#f1f4f7', 'editor.selectionBackground': '#0d948830', 'focusBorder': '#0d9488' } });
+      m.editor.defineTheme('mp-dark', { base: 'vs-dark', inherit: true, rules: [{ token: 'string.key.json', foreground: '97c1f7' }, { token: 'string.value.json', foreground: '7dd9ba' }, { token: 'string', foreground: '7dd9ba' }, { token: 'number', foreground: 'fdb770' }, { token: 'keyword', foreground: 'd99ee7' }, { token: 'comment', foreground: '6c7f7a' }], colors: { 'editor.background': '#111918', 'editorGutter.background': '#111918', 'editor.lineHighlightBackground': '#16201f', 'editor.lineHighlightBorder': '#00000000', 'editorLineNumber.foreground': '#3f524e', 'editorLineNumber.activeForeground': '#9db0ab', 'editor.selectionBackground': '#35b6a540', 'editorWidget.background': '#16201f', 'editorCursor.foreground': '#5fd4c4', 'focusBorder': '#35b6a5' } });
+      m.editor.defineTheme('mp-light', { base: 'vs', inherit: true, rules: [{ token: 'string.key.json', foreground: '17559b' }, { token: 'string.value.json', foreground: '006f55' }, { token: 'string', foreground: '006f55' }, { token: 'number', foreground: 'b15300' }, { token: 'keyword', foreground: '874197' }, { token: 'comment', foreground: '74847f' }], colors: { 'editor.background': '#f5f8f7', 'editorGutter.background': '#f5f8f7', 'editor.lineHighlightBackground': '#ecf1ef', 'editor.lineHighlightBorder': '#00000000', 'editorLineNumber.foreground': '#a7b5b0', 'editorLineNumber.activeForeground': '#4a5a56', 'editor.selectionBackground': '#35b6a538', 'editorWidget.background': '#ffffff', 'editorCursor.foreground': '#1b7a6e', 'focusBorder': '#35b6a5' } });
       const js = m.languages.typescript.javascriptDefaults;
       js.setCompilerOptions({ target: 99, allowNonTsExtensions: true, noLib: false, lib: ['es2020'] });
       js.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false });
@@ -71,7 +71,7 @@ export function createEditor(el, { value = '', language = 'plaintext', readOnly 
   sweep();
   const e = window.monaco.editor.create(el, {
     value, language, readOnly, automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false,
-    fontSize: opts.fontSize, fontFamily: 'JetBrains Mono, Fira Code, DejaVu Sans Mono, monospace', wordWrap: opts.wordWrap ? 'on' : 'off',
+    fontSize: opts.fontSize, fontFamily: "'JetBrains Mono', 'Fira Code', 'DejaVu Sans Mono', monospace", wordWrap: opts.wordWrap ? 'on' : 'off',
     lineNumbers: lineNumbers ? 'on' : 'off', folding, renderLineHighlight: readOnly ? 'none' : 'line', tabSize: 2, fixedOverflowWidgets: true,
     scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 }, padding: { top: 6 }, quickSuggestions: { other: true, strings: true },
     'semanticHighlighting.enabled': false, contextmenu: true, lineNumbersMinChars: 3, glyphMargin: false, stickyScroll: { enabled: false },

@@ -35,6 +35,9 @@ const pyDict = hs => hs.length ? `{\n${hs.map(([k, v]) => `  ${dq(k)}: ${dq(v)}`
 const goStr = s => s.includes('`') ? dq(s) : '`' + s + '`';
 const phpStr = s => `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 
+// cURL for exactly what was sent (resolved URL, final headers and body) — used by the dispatch log.
+export const curlOf = sent => TARGETS['cURL'].gen({ method: sent.method, url: sent.url, headers: sent.headers || [], body: sent.body ?? null });
+
 export function openCodegen(tab) {
   const d = tab.draft;
   if (d.kind && !['http', 'graphql'].includes(d.kind)) return toast('Code generation is available for HTTP and GraphQL requests', 'error');

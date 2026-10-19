@@ -1,6 +1,6 @@
 // HTTP + GraphQL request editor.
 import { W, T, find, varMap, saveT, saveW, kindBadge } from '../state.js';
-import { h, esc, icon, kvTable, kvRow, toast, menuFor, md, uid, bus, dragResize, varOverlay } from '../ui.js';
+import { h, esc, icon, kvTable, kvRow, toast, menuFor, md, uid, bus, dragResize, varOverlay, clone } from '../ui.js';
 import { createEditor, formatEditor } from '../editor.js';
 import { rt, markDirty, saveTab, renderTabs } from '../tabs.js';
 import { renderAuth } from './auth.js';
@@ -68,6 +68,30 @@ export const SNIPPETS = {
 };
 
 // ---------- view ----------
+// Terse hints next to each section tab ("Params 2 · Auth Bearer · Body JSON"); '' = nothing set.
+function summary(k, d, path) {
+  const n = a => (a || []).filter(x => x.on && x.key).length;
+  const b = d.body || {};
+  switch (k) {
+    case 'params': { const c = n(d.params) + (d.pathVars || []).length; return c ? String(c) : ''; }
+    case 'auth': {
+      const t = d.auth?.type || 'inherit';
+      if (t === 'none') return 'none';
+      if (t !== 'inherit') return AUTH_SHORT(t);
+      const p = [...path].reverse().find(x => x.auth && x.auth.type !== 'inherit');
+      return p ? `↑ ${AUTH_SHORT(p.auth.type)}` : '';
+    }
+    case 'headers': { const c = n(d.headers); return c ? String(c) : ''; }
+    case 'body': return { none: '', raw: (b.lang || 'text').toUpperCase(), formdata: `form ${n(b.formdata)}`, urlencoded: `urlenc ${n(b.urlencoded)}`, binary: 'file', graphql: 'GQL' }[b.mode] ?? '';
+    case 'query': return b.graphql?.query?.match(/^\s*(mutation|subscription)/)?.[1] || '';
+    case 'scripts': return [d.pre?.trim() && 'pre', d.tests?.trim() && 'post'].filter(Boolean).join('+');
+    case 'settings': { const c = Object.keys(d.settings || {}).length; return c ? String(c) : ''; }
+    case 'docs': return d.description?.trim() ? '✓' : '';
+  }
+  return '';
+}
+const AUTH_SHORT = t => ({ bearer: 'Bearer', basic: 'Basic', apikey: 'API key', jwt: 'JWT', digest: 'Digest', oauth1: 'OAuth1', oauth2: 'OAuth2', hawk: 'Hawk', awsv4: 'AWS', ntlm: 'NTLM', akamai: 'EdgeGrid', asap: 'ASAP' }[t] || t);
+
 export function renderHttp(tab, el) {
   const d = tab.draft;
   const r = rt(tab);
@@ -76,30 +100,72 @@ export function renderHttp(tab, el) {
   const path = chainOf(d, tab.ref);
   el.replaceChildren();
 
-  // name + breadcrumb
-  const nameBar = h(`<div class="reqname">${path.map(p => `<span class="crumb">${esc(p.name)}</span><span class="dim">/</span>`).join('')}<input class="nm" value="${esc(d.name)}" aria-label="Request name"><span class="sp"></span>
-    <div class="row-flex" style="gap:4px"><button class="sm" data-save title="Save (Ctrl+S)">${icon('check')} Save</button><button class="ghost sm" data-savemenu title="More save options">${icon('chevD')}</button>
-    <button class="ghost sm" data-code title="Generate code snippet">${icon('code')}</button></div></div>`);
-  const nm = nameBar.querySelector('.nm');
-  nm.style.width = Math.max(80, d.name.length * 8 + 20) + 'px';
-  nm.oninput = () => { d.name = nm.value; nm.style.width = Math.max(80, d.name.length * 8 + 20) + 'px'; markDirty(tab); renderTabs(); };
-  nameBar.querySelector('[data-save]').onclick = () => saveTab(tab);
-  nameBar.querySelector('[data-savemenu]').onclick = e => menuFor(e.currentTarget, [{ label: 'Save as…', icon: 'copy', kb: 'Ctrl+Shift+S', run: () => saveTab(tab, true) }]);
-  nameBar.querySelector('[data-code]').onclick = () => bus.emit('codegen', tab);
-  el.append(nameBar);
+  // Stacked: one flowing column (request card, then the dispatch log). Side: two scrolling columns (Ctrl+Alt+V).
+  const side = W.settings.layout === 'side';
+  const desk = h(`<div class="desk ${side ? 'side' : ''}"></div>`);
+  const left = side ? h(`<div class="col"></div>`) : desk, right = side ? h(`<div class="col"></div>`) : desk;
+  if (side) {
+    const ratio = T.ui.split ?? 0.5;
+    desk.style.setProperty('--split', ratio + 'fr');
+    desk.style.setProperty('--split2', (1 - ratio) + 'fr');
+    const gutter = h(`<div class="gutter" role="separator" aria-label="Resize panes"></div>`);
+    desk.append(left, gutter, right);
+    let startRatio;
+    gutter.addEventListener('mousedown', () => { startRatio = T.ui.split ?? 0.5; });
+    dragResize(gutter, {
+      axis: 'x',
+      onMove: dx => {
+        const v = Math.min(.85, Math.max(.15, startRatio + dx / desk.clientWidth));
+        T.ui.split = v;
+        desk.style.setProperty('--split', v + 'fr'); desk.style.setProperty('--split2', (1 - v) + 'fr');
+      },
+      onEnd: saveT,
+    });
+  }
+  el.append(desk);
 
-  // request line
-  const bar = h(`<div class="reqbar"><div class="urlgroup">
-      ${isGql ? '<span class="kind-label">GraphQL</span>' : `<select class="method ${esc(d.method)}" aria-label="HTTP method">${METHODS.map(m => `<option ${m === d.method ? 'selected' : ''}>${m}</option>`).join('')}${METHODS.includes(d.method) ? '' : `<option selected>${esc(d.method)}</option>`}</select>`}
-      <input class="url var-input" id="urlInput" placeholder="${isGql ? 'Enter GraphQL endpoint URL' : 'Enter URL or paste cURL'}" spellcheck="false" aria-label="Request URL">
+  const crumb = path.length ? path.map(p => p.name).join(' / ') : tab.ref ? '' : 'Unsaved request';
+  const card = h(`<section class="reqcard">
+    <div class="reqhead">
+      <div class="ttl"><span class="eyebrow crumb" title="${esc(crumb)}">${esc(crumb) || '&nbsp;'}</span><input class="nm" value="${esc(d.name)}" spellcheck="false" aria-label="Request name"></div>
+      <button data-ai title="Describe a request and let Claude build it">${icon('spark')} Build</button>
+      <button data-code title="Generate code snippet">${icon('code')} Code</button>
+      <button data-cookies title="Manage cookies">${icon('cookie')} Cookies</button>
+      <button data-save title="Save (Ctrl+S)">Save · Ctrl S</button><button class="ghost" data-savemenu title="More save options" aria-label="More save options">${icon('chevD')}</button>
     </div>
-    <button data-ai title="Describe a request and let Claude build it">${icon('spark')}</button>
-    <div class="row-flex" style="gap:0"><button class="primary" data-send style="border-radius:6px 0 0 6px;min-width:84px;justify-content:center">${icon('send')} Send</button><button class="primary" data-sendmenu style="border-radius:0 6px 6px 0;border-left:1px solid rgba(0,0,0,.2);padding:5px 6px" aria-label="Send options">${icon('chevD')}</button></div>
-  </div>`);
-  const url = bar.querySelector('.url');
+    <div class="reqline">
+      ${isGql ? '<span class="kindtag">GraphQL</span>' : `<button class="methodbtn ${esc(d.method)}" data-method aria-label="HTTP method" aria-haspopup="menu">${esc(d.method)}${icon('chevD')}</button>`}
+      <div class="urlbox"><input class="url var-input" id="urlInput" placeholder="${isGql ? 'Enter GraphQL endpoint URL' : 'Enter URL or paste a cURL command'}" spellcheck="false" aria-label="Request URL"></div>
+      <div class="sendgrp"><button class="primary" data-send>Send ${icon('arrowR')}</button><button class="primary" data-sendmenu aria-label="Send options">${icon('chevD')}</button></div>
+    </div>
+    <div class="resolves"><span>resolves to</span><span class="u"></span><span class="w"></span></div>
+    <div class="secgrid" role="tablist"></div>
+    <div class="secbody"></div>
+  </section>`);
+  left.append(card);
+
+  const nm = card.querySelector('.nm');
+  nm.oninput = () => { d.name = nm.value; markDirty(tab); renderTabs(); };
+  card.querySelector('[data-save]').onclick = () => saveTab(tab);
+  card.querySelector('[data-savemenu]').onclick = e => menuFor(e.currentTarget, [{ label: 'Save as…', icon: 'copy', kb: 'Ctrl+Shift+S', run: () => saveTab(tab, true) }]);
+  card.querySelector('[data-code]').onclick = () => bus.emit('codegen', tab);
+  card.querySelector('[data-cookies]').onclick = () => bus.emit('cookies');
+  card.querySelector('[data-ai]').onclick = () => bus.emit('ai-generate', tab);
+
+  const url = card.querySelector('.url');
   url.value = d.url;
   const urlOv = varOverlay(url, k => k in varMap(path[0]?.id) || !!globalThis.MP_DYNAMIC.dynamicFor(k));
-  url.title = 'Resolved: ' + resolvedUrl(tab);
+  const resolves = card.querySelector('.resolves');
+  const paintResolved = () => {
+    const u = resolvedUrl(tab);
+    resolves.querySelector('.u').textContent = u || '—';
+    resolves.querySelector('.u').title = u;
+    const bad = new Set([...(u || '').matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)].map(m => m[1]));
+    resolves.querySelector('.w').textContent = bad.size ? `${bad.size} unresolved` : '';
+    resolves.querySelector('.w').title = [...bad].map(k => `{{${k}}}`).join(', ');
+    url.title = 'Resolved: ' + u;
+  };
+  paintResolved();
   const importCurl = text => {
     try {
       const c = parseCurl(text.trim());
@@ -120,58 +186,39 @@ export function renderHttp(tab, el) {
     d.url = v;
     urlToParams(d);
     markDirty(tab);
-    url.title = 'Resolved: ' + resolvedUrl(tab);
+    paintResolved();
     if (r.reqTab === 'params') drawSub();
     updateCounts();
   });
   url.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.ctrlKey) { e.preventDefault(); send(tab); } });
-  bar.querySelector('select.method')?.addEventListener('change', e => { d.method = e.target.value; e.target.className = 'method ' + d.method; markDirty(tab); renderTabs(); bus.emit('tree-soft'); });
-  bar.querySelector('[data-send]').onclick = () => rt(tab).loading ? rt(tab).cancel?.() : send(tab);
-  bar.querySelector('[data-sendmenu]').onclick = e => menuFor(e.currentTarget, [
+  const mbtn = card.querySelector('[data-method]');
+  if (mbtn) mbtn.onclick = () => menuFor(mbtn, METHODS.map(m => ({ label: m, icon: m === d.method ? 'check' : '', run: () => {
+    d.method = m;
+    mbtn.className = 'methodbtn ' + m;
+    mbtn.firstChild.textContent = m;
+    markDirty(tab); renderTabs(); bus.emit('tree-soft');
+  } })));
+  card.querySelector('[data-send]').onclick = () => rt(tab).loading ? rt(tab).cancel?.() : send(tab);
+  card.querySelector('[data-sendmenu]').onclick = e => menuFor(e.currentTarget, [
     { label: 'Send and Download', icon: 'download', kb: 'Ctrl+Alt+Enter', run: () => send(tab, true) },
     { label: 'Send', icon: 'send', kb: 'Ctrl+Enter', run: () => send(tab) },
   ]);
-  bar.querySelector('[data-ai]').onclick = () => bus.emit('ai-generate', tab);
-  el.append(bar);
-
-  // split panes
-  const split = h(`<div class="split ${W.settings.layout === 'side' ? 'side' : ''}"><div class="pane" id="reqPane"></div><div class="gutter" role="separator"></div><div class="pane" id="resPane"></div></div>`);
-  const ratio = T.ui.split ?? 0.5;
-  split.style.setProperty('--split', ratio + 'fr');
-  split.style.setProperty('--split2', (1 - ratio) + 'fr');
-  el.append(split);
-  const reqPane = split.querySelector('#reqPane'), resPane = split.querySelector('#resPane');
-  const gutter = split.querySelector('.gutter');
-  let startRatio;
-  gutter.addEventListener('mousedown', () => { startRatio = T.ui.split ?? 0.5; });
-  dragResize(gutter, {
-    axis: W.settings.layout === 'side' ? 'x' : 'y',
-    onMove: dx => {
-      const total = W.settings.layout === 'side' ? split.clientWidth : split.clientHeight;
-      const v = Math.min(.85, Math.max(.15, startRatio + dx / total));
-      T.ui.split = v;
-      split.style.setProperty('--split', v + 'fr'); split.style.setProperty('--split2', (1 - v) + 'fr');
-    },
-    onEnd: saveT,
-  });
+  if (r.loading) card.querySelector('[data-send]').innerHTML = `${icon('x')} Cancel`;
 
   const tabsDef = isGql
-    ? [['query', 'Query'], ['auth', 'Authorization'], ['headers', 'Headers'], ['scripts', 'Scripts'], ['settings', 'Settings'], ['docs', 'Docs']]
-    : [['params', 'Params'], ['auth', 'Authorization'], ['headers', 'Headers'], ['body', 'Body'], ['scripts', 'Scripts'], ['settings', 'Settings'], ['docs', 'Docs']];
-  const sub = h(`<div class="subtabs" role="tablist">${tabsDef.map(([k, l]) => `<button class="st" data-t="${k}" role="tab">${l}</button>`).join('')}</div>`);
-  const body = h(`<div class="panel-body"></div>`);
-  reqPane.append(sub, body);
+    ? [['query', 'Query'], ['auth', 'Auth'], ['headers', 'Headers'], ['scripts', 'Scripts'], ['settings', 'Settings'], ['docs', 'Docs']]
+    : [['params', 'Params'], ['auth', 'Auth'], ['headers', 'Headers'], ['body', 'Body'], ['scripts', 'Scripts'], ['settings', 'Settings'], ['docs', 'Docs']];
+  const grid = card.querySelector('.secgrid');
+  const body = card.querySelector('.secbody');
   const updateCounts = () => {
-    sub.querySelectorAll('[data-t]').forEach(b => {
-      const k = b.dataset.t;
-      b.classList.toggle('on', k === r.reqTab);
-      const n = k === 'params' ? (d.params || []).filter(p => p.on && p.key).length + (d.pathVars || []).length : k === 'headers' ? (d.headers || []).filter(x => x.on && x.key).length : 0;
-      const flag = (k === 'scripts' && (d.pre?.trim() || d.tests?.trim())) || (k === 'body' && d.body?.mode !== 'none') || (k === 'auth' && d.auth?.type !== 'inherit' && d.auth?.type !== 'none') || (k === 'docs' && d.description?.trim());
-      b.innerHTML = tabsDef.find(t => t[0] === k)[1] + (n ? ` <span class="cnt">(${n})</span>` : '') + (flag ? ' <span class="flag"></span>' : '');
-    });
+    grid.replaceChildren(...tabsDef.map(([k, l]) => {
+      const sm = summary(k, d, path);
+      const b = h(`<button class="seccard st ${k === r.reqTab ? 'on' : ''}" data-t="${k}" role="tab" aria-selected="${k === r.reqTab}"><span class="l">${l}</span><span class="s">${esc(sm)}</span></button>`);
+      b.onclick = () => { r.reqTab = k; drawSub(); };
+      return b;
+    }));
   };
-  sub.onclick = e => { const b = e.target.closest('[data-t]'); if (b) { r.reqTab = b.dataset.t; drawSub(); } };
-  const changed = () => { markDirty(tab); updateCounts(); };
+  const changed = () => { markDirty(tab); updateCounts(); paintResolved(); };
 
   function drawSub() {
     updateCounts();
@@ -211,22 +258,26 @@ export function renderHttp(tab, el) {
     if (t === 'query') drawGraphql(tab, body, changed);
     if (t === 'scripts') drawScripts(tab, body, changed);
     if (t === 'settings') drawSettings(d, body, changed);
-    if (t === 'docs') drawDocs(d, body, changed);
+    if (t === 'docs') drawDocs(tab, body, changed);
   }
   drawSub();
-  r.renderRes = () => renderResponse(tab, resPane, {
+  const logEl = h(`<div class="dlog"></div>`);
+  right.append(logEl);
+  r.renderRes = () => renderResponse(tab, logEl, {
     onAskAi: k => bus.emit('ai-quick', k),
-    onSaveExample: () => { const ex = saveAsExample(tab, r.res); if (ex) bus.emit('tree'); },
+    onSaveExample: res => { const ex = saveAsExample(tab, res); if (ex) bus.emit('tree'); },
+    onResend: run => send(tab, false, run.req),
+    onRestore: run => { const { id, name, examples } = d; Object.assign(d, clone(run.req), { id, name, examples }); markDirty(tab); renderTabs(); bus.emit('render-view'); toast('Request restored to what was sent at ' + new Date(run.at).toLocaleTimeString()); },
     onDisableSsl: scope => {
       if (scope === 'all') { W.settings.sslVerify = false; saveW(); toast('SSL certificate verification turned off (Settings → General)'); }
-      else { (d.settings ||= {}).sslVerify = false; markDirty(tab); toast('SSL verification off for this request (request Settings tab)'); }
+      else { (d.settings ||= {}).sslVerify = false; markDirty(tab); updateCounts(); toast('SSL verification off for this request (request Settings)'); }
       send(tab);
     },
   });
   r.renderRes();
   r.focusUrl = () => { url.focus(); url.select(); };
   r.focusReq = () => body.querySelector('input,textarea,.monaco-editor textarea')?.focus();
-  r.focusRes = () => resPane.querySelector('button.st.on, .monaco-editor textarea')?.focus();
+  r.focusRes = () => logEl.querySelector('.run.open .runtabs button.on, .run .runhead')?.focus();
   r.beautify = () => beautify(tab);
 }
 
@@ -252,7 +303,12 @@ function drawBody(tab, el, changed) {
   if (b.mode === 'raw') {
     const box = h(`<div class="editor-wrap"></div>`);
     el.append(box);
-    rt(tab).bodyEditor = createEditor(box, { value: b.raw || '', language: b.lang === 'text' ? 'plaintext' : b.lang, onChange: v => { b.raw = v; changed(); }, placeholder: b.lang === 'json' ? '{\n  "key": "{{variable}}"\n}' : '' });
+    const hint = h(`<div class="jsonhint" hidden>Not valid JSON yet — it will be sent exactly as written.</div>`);
+    // {{vars}} may sit bare in JSON ({"n": {{count}}}), so swap them for a literal before checking.
+    const check = v => { if (b.lang !== 'json' || !v.trim()) return hint.hidden = true; try { JSON.parse(v.replace(/\{\{[^{}]+\}\}/g, '0')); hint.hidden = true; } catch { hint.hidden = false; } };
+    rt(tab).bodyEditor = createEditor(box, { value: b.raw || '', language: b.lang === 'text' ? 'plaintext' : b.lang, onChange: v => { b.raw = v; changed(); check(v); }, placeholder: b.lang === 'json' ? '{\n  "key": "{{variable}}"\n}' : '' });
+    check(b.raw || '');
+    el.append(hint);
   }
   if (b.mode === 'urlencoded') el.append(kvTable(b.urlencoded ||= [], changed, { desc: true }));
   if (b.mode === 'formdata') el.append(kvTable(b.formdata ||= [], changed, { files: true, desc: true }));
@@ -375,14 +431,16 @@ async function drawExplorer(tab, el) {
 export function drawScripts(tab, el, changed, holder = tab.draft) {
   const r = rt(tab);
   r.scriptTab ||= holder.tests?.trim() && !holder.pre?.trim() ? 'post' : 'pre';
-  el.classList.add('flush');
-  const wrap = h(`<div style="display:grid;grid-template-columns:150px 1fr 220px;flex:1;min-height:0">
-    <div style="border-right:1px solid var(--line);padding:8px;display:flex;flex-direction:column;gap:2px">
-      <button class="ghost ${r.scriptTab === 'pre' ? 'on' : ''}" data-s="pre" style="justify-content:flex-start">Pre-request ${holder.pre?.trim() ? '<span class="flag"></span>' : ''}</button>
-      <button class="ghost ${r.scriptTab === 'post' ? 'on' : ''}" data-s="post" style="justify-content:flex-start">Post-response ${holder.tests?.trim() ? '<span class="flag"></span>' : ''}</button>
+  const wrap = h(`<div class="scripts" style="display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;flex:1;min-height:0">
+    <div class="col-flex" style="min-width:0;gap:10px">
+      <div class="pillseg" style="align-self:flex-start">
+        <button class="${r.scriptTab === 'pre' ? 'on' : ''}" data-s="pre">Pre-request${holder.pre?.trim() ? ' •' : ''}</button>
+        <button class="${r.scriptTab === 'post' ? 'on' : ''}" data-s="post">Post-response${holder.tests?.trim() ? ' •' : ''}</button>
+      </div>
+      <div class="editor-wrap"></div>
+      <span class="dim" style="font-size:11.5px">${r.scriptTab === 'pre' ? 'Runs before the request is sent. Use pm.environment / pm.variables to prepare values.' : 'Runs after the reply arrives. pm.test() results show under Tests in the dispatch log.'}</span>
     </div>
-    <div style="padding:8px;display:flex;flex-direction:column;min-height:0"><div class="editor-wrap"></div></div>
-    <div style="border-left:1px solid var(--line);padding:8px;overflow:auto"><div class="dim" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Snippets</div><div data-snip></div></div></div>`);
+    <div style="display:flex;flex-direction:column;gap:4px;min-width:0;overflow:auto"><span class="eyebrow" style="padding:6px 4px">Snippets</span><div data-snip style="display:flex;flex-direction:column;gap:2px;max-height:330px;overflow:auto"></div></div></div>`);
   el.append(wrap);
   const key = r.scriptTab === 'pre' ? 'pre' : 'tests';
   const ed = createEditor(wrap.querySelector('.editor-wrap'), { value: holder[key] || '', language: 'javascript', onChange: v => { holder[key] = v; changed(); }, placeholder: r.scriptTab === 'pre' ? '// Runs before the request is sent\n// pm.environment.set("timestamp", Date.now());' : '// Runs after the response is received\n// pm.test("Status code is 200", () => pm.response.to.have.status(200));' });
@@ -390,7 +448,7 @@ export function drawScripts(tab, el, changed, holder = tab.draft) {
   wrap.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { r.scriptTab = b.dataset.s; el.replaceChildren(); drawScripts(tab, el, changed, holder); });
   const snip = wrap.querySelector('[data-snip]');
   for (const [name, code] of Object.entries(SNIPPETS[r.scriptTab])) {
-    const a = h(`<div style="padding:4px 2px;cursor:pointer;color:var(--acc);font-size:12.5px">${esc(name)}</div>`);
+    const a = h(`<button class="ghost" style="justify-content:flex-start;white-space:normal;text-align:left;color:var(--ac-tx);font-size:12px;line-height:1.35;border-radius:8px">${esc(name)}</button>`);
     a.onclick = () => {
       const model = ed.getModel();
       const last = model.getLineCount();
@@ -431,32 +489,42 @@ function drawSettings(d, el, changed) {
   el.append(f);
 }
 
-function drawDocs(d, el, changed) {
-  const wrap = h(`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0"><textarea style="resize:none" placeholder="Describe this request in Markdown…"></textarea><div class="md" style="overflow:auto;border-left:1px solid var(--line);padding-left:12px"></div></div>`);
-  const ta = wrap.querySelector('textarea'), pv = wrap.querySelector('.md');
-  ta.value = d.description || '';
-  pv.innerHTML = md(d.description || '*No documentation yet.*');
-  ta.oninput = () => { d.description = ta.value; pv.innerHTML = md(ta.value || '*No documentation yet.*'); changed(); };
+function drawDocs(tab, el, changed) {
+  const d = tab.draft, r = rt(tab);
+  r.docsTab ||= d.description?.trim() ? 'preview' : 'write';
+  const wrap = h(`<div class="docs col-flex" style="gap:10px"><div class="pillseg" style="align-self:flex-start"><button data-d="write" class="${r.docsTab === 'write' ? 'on' : ''}">Write</button><button data-d="preview" class="${r.docsTab === 'preview' ? 'on' : ''}">Preview</button></div></div>`);
+  if (r.docsTab === 'write') {
+    const ta = h(`<textarea placeholder="Describe what this request does, its parameters and expected responses. Markdown is supported." style="line-height:1.6;padding:14px 16px;border-radius:12px"></textarea>`);
+    ta.value = d.description || '';
+    ta.oninput = () => { d.description = ta.value; changed(); };
+    wrap.append(ta);
+  } else wrap.append(h(`<div class="md" style="max-width:680px;padding:4px;user-select:text">${md(d.description || '*No documentation yet.*')}</div>`));
+  wrap.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { r.docsTab = b.dataset.d; el.replaceChildren(); drawDocs(tab, el, changed); });
   el.append(wrap);
 }
 
 // ---------- send ----------
-export async function send(tab, download = false) {
+export async function send(tab, download = false, snapshot = null) {
   const r = rt(tab);
   if (r.loading) return;
+  const req = clone(snapshot || tab.draft);
   r.loading = true;
   r.signalId = uid();
   r.cancel = () => api.httpCancel(r.signalId);
+  r.sending = { method: req.kind === 'graphql' ? 'POST' : req.method, url: snapshot ? req.url : resolvedUrl(tab) };
   r.renderRes?.();
   const sendBtn = document.querySelector('[data-send]');
   if (sendBtn) sendBtn.innerHTML = `${icon('x')} Cancel`;
   try {
-    r.res = await execute(tab.draft, { refId: tab.ref, signalId: r.signalId });
+    r.res = await execute(req, { refId: tab.ref, signalId: r.signalId });
   } catch (e) {
     r.res = { ok: false, error: e.message, time: 0 };
   }
   r.loading = false;
-  if (sendBtn?.isConnected) sendBtn.innerHTML = `${icon('send')} Send`;
+  // Dispatch log: newest first, newest expanded, capped so a long session doesn't hold every body in memory.
+  r.runs = [{ id: uid(), res: r.res, req, at: Date.now(), method: r.res.sent?.method || r.sending.method, url: r.res.sent?.url || r.sending.url }, ...(r.runs || [])].slice(0, 15);
+  r.openRuns = new Set([r.runs[0].id]);
+  if (sendBtn?.isConnected) sendBtn.innerHTML = `Send ${icon('arrowR')}`;
   r.renderRes?.();
   if (download && r.res.ok) saveToFile(tab, r.res);
   bus.emit('sent', tab);

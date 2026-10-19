@@ -89,6 +89,7 @@ export async function appImportDialog(sourceId) {
   const isDone = c => imported.has(c.key) || imported.has('name:' + c.name.trim().toLowerCase());
   const fresh = list.filter(c => !isDone(c));
   const body = h(`<div class="col-flex">
+    <div class="dim" style="font-size:12px">Read from ${esc(src.name)}'s local data on this computer. Nothing in ${esc(src.name)} is changed.</div>
     ${list.some(c => c.partial) ? `<div class="callout warn">${src.name} keeps some request details only in its cloud. Requests marked partial come in with name, method and URL only — open them in ${src.name} once to cache the full request, then re-import.</div>` : ''}
     ${list.some(c => c.recentOnly) ? `<div class="callout">${src.name} only keeps recently saved APIs on disk, so only those are listed.</div>` : ''}
     <label class="node"><input type="checkbox" data-all ${fresh.length ? 'checked' : 'disabled'}><b class="nm">Select all</b><span class="dim">${fresh.length} of ${list.length} not imported yet</span></label>

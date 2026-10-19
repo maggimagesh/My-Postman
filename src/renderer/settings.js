@@ -103,7 +103,16 @@ export function openSettings(section = 'general') {
       return;
     }
     if (sec === 'shortcuts') { pane.append(shortcutSheet()); return; }
-    if (sec === 'about') { pane.append(h(`<div class="col-flex"><div class="row-flex"><img src="/assets/icons/64.png" width="48" height="48" alt=""><div><b style="font-size:16px">My Postmaster</b><div class="dim">Version ${esc(window.APP_VERSION || '')}</div></div></div><div class="dim">A desktop API client for HTTP, GraphQL, WebSocket, Socket.IO, SSE, MQTT and gRPC, with Claude built in.</div></div>`)); return; }
+    if (sec === 'about') { pane.append(h(`<div class="col-flex" style="gap:14px;max-width:620px;line-height:1.6">
+      <div class="row-flex" style="gap:14px"><img src="/assets/icons/64.png" width="52" height="52" alt=""><div><b style="font:600 20px var(--display)">My Postmaster</b><div class="dim">Version ${esc(window.APP_VERSION || '')} · made by Magesh Kumar</div></div></div>
+      <p style="margin:0">I built My Postmaster because I wanted an API client that opens instantly, works offline, keeps my data on my own machine, and lets me do everything from the keyboard. Every reply is kept and stamped so I can see what changed between two sends, and Claude sits next to the request when something doesn't make sense.</p>
+      <div><b>What's new</b>
+        <ul style="margin:6px 0 0;padding-left:18px">
+          <li><b>3.0.0</b> — a new look. Replies are postmarked and kept in the dispatch log; compare any two side by side, see response times at a glance, copy what was sent as cURL, or send it again. A status bar shows your environment, proxy, TLS checking and cookies.</li>
+          <li><b>2.0.11</b> — one-click import from Postman and EchoAPI installed on this computer.</li>
+          <li><b>2.0.7 – 2.0.10</b> — {{variables}} highlighted in bodies and tables, consistent import / export, F12 no longer opens developer tools.</li>
+        </ul></div>
+      <div><b>Your data</b><div class="dim">Everything stays in <code>~/.config/My Postmaster/</code>. Nothing is sent anywhere except the requests you send and, if you use it, your questions to Claude. One-click import only reads another app's local data when you click it, and never changes it.</div></div></div>`)); return; }
     pane.append(form);
   };
   for (const [k, l, ic] of SECTIONS) { const n = h(`<div class="node" data-s="${k}">${icon(ic)}<span class="nm">${l}</span></div>`); n.onclick = () => show(k); nav.append(n); }

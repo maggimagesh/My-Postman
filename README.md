@@ -82,6 +82,8 @@ You don't have to start from scratch. My Postmaster can import:
 | **cURL** | Paste a command into the URL bar or the import box |
 | **My Postmaster backups** | Your full workspace |
 
+One-click import only reads the other app's local data on this computer, only when you click it, and never changes it.
+
 You can import from a file, a link, pasted text, or by dropping files onto the window. Collections and environments export as JSON files that other API tools can read.
 
 ---

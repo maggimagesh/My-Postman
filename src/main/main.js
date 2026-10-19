@@ -52,7 +52,7 @@ function createWindow() {
   const dark = ws?.settings?.theme !== 'light';
   const win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 900, minHeight: 560, title: 'My Postmaster', icon: path.join(ROOT, 'icon.png'),
-    backgroundColor: dark ? '#0f1218' : '#f6f7f9', show: false,
+    backgroundColor: dark ? '#0c1211' : '#ecf1ef', show: false, frame: false,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, spellcheck: false },
   });
   if (primaryId === null) primaryId = win.webContents.id;
@@ -107,6 +107,13 @@ h('ai:ask', (e, q) => ai.ask(e.sender, q));
 h('ai:cancel', (_e, id) => ai.cancel(id));
 
 h('appimport:sources', () => appimport.sources());
+h('win:ctl', (e, a) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (a === 'min') w.minimize();
+  else if (a === 'max') w.isMaximized() ? w.unmaximize() : w.maximize();
+  else if (a === 'close') w.close();
+  return w.isMaximized();
+});
 h('appimport:read', (_e, id) => appimport.read(id));
 
 h('dialog:open', async (e, o = {}) => {

@@ -26,6 +26,15 @@ function applyTheme() {
   document.documentElement.style.setProperty('--fs', (W.settings.fontSize || 13) + 'px');
   setEditorTheme(t === 'dark');
   setEditorOptions({ fontSize: W.settings.editorFontSize || 13, wordWrap: W.settings.wordWrap !== false });
+  renderThemeSeg();
+}
+const setTheme = th => { W.settings.theme = th; saveW(); applyTheme(); };
+function renderThemeSeg() {
+  const el = $('#themeSeg');
+  if (!el) return;
+  const cur = W.settings.theme || 'system';
+  el.innerHTML = [['light', 'Light', 'sun'], ['dark', 'Dark', 'moon'], ['system', 'System', 'monitor']].map(([k, l, ic]) => `<button data-th="${k}" role="radio" aria-checked="${k === cur}" class="${k === cur ? 'on' : ''}" title="${l} theme">${icon(ic)}<span class="tl">${l}</span></button>`).join('');
+  el.querySelectorAll('[data-th]').forEach(b => b.onclick = () => setTheme(b.dataset.th));
 }
 media.addEventListener('change', applyTheme);
 
@@ -34,6 +43,8 @@ function renderView() {
   const el = $('#view');
   const t = activeTab();
   el.replaceChildren();
+  el.classList.toggle('flow', !!t && t.kind === 'request' && ['http', 'graphql'].includes(t.draft.kind || 'http'));
+  el.classList.remove('clear');
   if (!t) { el.append(launchpad()); sweep(); return; }
   const k = t.kind;
   if (k === 'request') {
@@ -51,14 +62,31 @@ function renderView() {
 
 function launchpad() {
   const kinds = Object.entries(KINDS);
-  const el = h(`<div class="empty" style="max-width:760px"><img src="/assets/icons/128.png" width="72" height="72" alt="" style="opacity:.9"><div class="big" style="font-size:18px;margin:8px 0 2px">Welcome to My Postmaster</div><div class="dim">Start a request, open one from the sidebar, or press <kbd>Ctrl</kbd>+<kbd>K</kbd> to search.</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0">${kinds.map(([k, x]) => `<button data-k="${k}" style="flex-direction:column;padding:14px;gap:6px;height:auto">${icon(x.icon)}<b>${x.label}</b></button>`).join('')}<button data-ai style="flex-direction:column;padding:14px;gap:6px;height:auto">${icon('spark')}<b>Ask Claude</b></button></div>
-    <div class="row-flex" style="justify-content:center"><button data-import>${icon('download')} Import</button><button data-col>${icon('collections')} New collection</button><button data-keys>${icon('keyboard')} Shortcuts</button></div></div>`);
+  $('#view').classList.add('clear');
+  const firstRun = !W.collections.length && !W.history.length;
+  const recent = W.history.slice(0, 6);
+  const el = h(`<div class="deskclear">
+    <span class="big">${firstRun ? 'Welcome to My Postmaster' : 'No requests open'}</span>
+    <span class="lead">${firstRun ? 'Bring your work over from another API client in one click, import a file, or start a request from scratch.' : 'Open something from the sidebar, pick up where you left off below, or start fresh.'} <kbd>Ctrl K</kbd> finds anything.</span>
+    <div class="bring" data-bring hidden><b>Bring your collections over</b><span class="dim">Found on this computer:</span></div>
+    <div class="kinds">${kinds.map(([k, x]) => `<button data-k="${k}">${icon(x.icon)}${x.label}</button>`).join('')}<button data-ai>${icon('spark')}Ask Claude</button></div>
+    ${recent.length ? `<span class="eyebrow" style="margin-top:8px">Recently sent</span><div class="recent">${recent.map((x, i) => `<div class="node hist" data-h="${i}"><span class="hstat s${/^\d/.test(String(x.status)) ? String(x.status)[0] : 'err'}">${esc(/^\d+$/.test(String(x.status)) ? x.status : 'ERR')}</span><span class="m ${esc(x.req.method || 'GET')}" style="width:auto">${esc(x.req.method || '')}</span><span class="nm mono" style="font-size:12px">${esc(x.req.url || x.req.name)}</span><span class="dim" style="font-size:11.5px">${new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>`).join('')}</div>` : ''}
+    <div class="row-flex" style="margin-top:6px"><button data-import>${icon('download')} Import a file</button><button data-col>${icon('collections')} New collection</button><button data-keys>${icon('keyboard')} Shortcuts</button></div></div>`);
   el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => newRequestTab(b.dataset.k));
+  el.querySelectorAll('[data-h]').forEach(row => row.onclick = () => { const x = recent[+row.dataset.h]; openTab({ kind: 'request', draft: { ...JSON.parse(JSON.stringify(x.req)), id: Math.random().toString(36).slice(2) } }); });
   el.querySelector('[data-ai]').onclick = () => aiGenerateRequest(null);
   el.querySelector('[data-import]').onclick = importDialog;
   el.querySelector('[data-col]').onclick = () => { T.ui.side = 'collections'; T.ui.sideHidden = false; applySideVisibility(); $('#sideAdd').click(); };
   el.querySelector('[data-keys]').onclick = cheatsheet;
+  api.appimportSources().then(list => {
+    const bring = el.querySelector('[data-bring]');
+    for (const src of list.filter(x => x.found)) {
+      const b = h(`<button class="primary">${icon('download')} From ${esc(src.name)}</button>`);
+      b.onclick = async () => { if (await appImportDialog(src.id)) { T.ui.side = 'collections'; T.ui.sideHidden = false; applySideVisibility(); bus.emit('tree'); } };
+      bring.append(b);
+    }
+    if (list.some(x => x.found)) bring.hidden = false;
+  }).catch(() => {});
   return el;
 }
 
@@ -153,9 +181,32 @@ function envQuickLook() {
   modal({ title: 'Variables in scope', body, onMount: x => { m = x; } });
 }
 
+// "Sending from" dock at the foot of the sidebar: pick the active environment, peek at and edit its variables.
 function renderEnvSelect() {
-  const s = $('#envSel');
-  s.innerHTML = `<option value="">No environment</option>${W.environments.map(e => `<option value="${e.id}" ${e.id === W.activeEnv ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}`;
+  const dock = $('#envDock');
+  const env = activeEnv();
+  const open = !!T.ui.envOpen && !!env;
+  const pick = id => { W.activeEnv = id || null; saveW(); bus.emit('env'); };
+  const few = W.environments.length <= 2;
+  dock.innerHTML = `<div class="dh"><span class="eyebrow" style="font-weight:600;color:var(--ink2)">Environment</span><span class="sp"></span>
+      ${env ? `<button class="lk ac" data-toggle title="Show or edit this environment's values">${open ? 'Hide' : 'Values'}</button>` : ''}
+      <button class="lk" data-look title="Every variable in scope: environment, collection and globals">In scope</button>
+      <button class="lk" data-manage>Manage</button></div>
+    ${few ? `<div class="envseg" role="radiogroup" aria-label="Active environment">${[['', 'None'], ...W.environments.map(e => [e.id, e.name])].map(([id, n]) => `<button data-env="${esc(id)}" class="${(W.activeEnv || '') === id ? 'on' : ''}" title="${esc(n)}">${esc(n)}</button>`).join('')}</div>`
+      : `<select id="envSel" aria-label="Active environment" title="Active environment"><option value="">No environment</option>${W.environments.map(e => `<option value="${e.id}" ${e.id === W.activeEnv ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</select>`}
+    ${open ? `<div class="envvars">${env.vars.filter(v => v.key).map((v, i) => `<div class="ev"><span title="${esc(v.key)}">${esc(v.key)}</span><input data-i="${env.vars.indexOf(v)}" type="${v.secret ? 'password' : 'text'}" value="${esc(v.value)}" placeholder="unset" spellcheck="false"></div>`).join('') || '<div class="none">No variables yet.</div>'}</div>` : ''}`;
+  dock.querySelectorAll('[data-env]').forEach(b => b.onclick = () => pick(b.dataset.env));
+  dock.querySelector('#envSel')?.addEventListener('change', e => pick(e.target.value));
+  dock.querySelector('[data-toggle]')?.addEventListener('click', () => { T.ui.envOpen = !T.ui.envOpen; saveT(); renderEnvSelect(); });
+  dock.querySelector('[data-look]').onclick = envQuickLook;
+  dock.querySelector('[data-manage]').onclick = () => { if (env) openTab({ kind: 'env', ref: env.id, draft: env }); else { T.ui.side = 'environments'; T.ui.sideHidden = false; applySideVisibility(); saveT(); renderSidebar(); } };
+  dock.querySelectorAll('.envvars input').forEach(inp => inp.onchange = () => {
+    env.vars[+inp.dataset.i].value = inp.value;
+    saveW();
+    for (const t of T.tabs) if (t.kind === 'env' && t.ref === env.id && !t.dirty) t.draft = JSON.parse(JSON.stringify(env));
+    bus.emit('vars');
+    bus.emit('render-view');
+  });
 }
 
 // ---------- status bar ----------
@@ -170,6 +221,16 @@ function renderStatus() {
   b('play', 'Runner', 'Run a collection', runnerPicker);
   b(W.settings.layout === 'side' ? 'layout' : 'layoutH', '', 'Toggle two-pane view (Ctrl+Alt+V)', toggleLayout);
   el.append(h(`<span class="sp"></span>`));
+  // At-a-glance state that changes what a request does: environment, proxy, TLS checks, cookie jar.
+  const si = (dot, text, title, fn) => { const x = h(`<button class="si" title="${esc(title)}"><i class="${dot}"></i>${esc(text)}</button>`); x.onclick = fn; el.append(x); return x; };
+  const env = activeEnv();
+  si(env ? 'on' : '', env ? env.name : 'No environment', 'Active environment', () => { T.ui.sideHidden = false; applySideVisibility(); $('#envDock').scrollIntoView(); $('#envDock button')?.focus(); });
+  const px = W.settings.proxy?.mode || 'none';
+  si(px === 'none' ? '' : 'warn', px === 'none' ? 'No proxy' : px === 'system' ? 'System proxy' : 'Proxy: ' + (W.settings.proxy.url || 'custom'), 'Proxy (Settings → Proxy)', () => openSettings('proxy'));
+  si(W.settings.sslVerify ? 'on' : 'warn', W.settings.sslVerify ? 'TLS verified' : 'TLS unverified', W.settings.sslVerify ? 'Certificates are verified' : 'Self-signed / expired certificates are accepted (Settings → General)', () => openSettings('general'));
+  const ck = si('', 'Cookies', 'Cookie jar', openCookies);
+  api.cookiesList().then(c => { if (ck.isConnected) ck.lastChild.textContent = `${c.length} cookie${c.length === 1 ? '' : 's'}`; }).catch(() => {});
+  el.append(h(`<span class="si" title="My Postmaster version">v${esc(window.APP_VERSION || '')}</span>`));
   b('keyboard', '', 'Keyboard shortcuts (Ctrl+/)', cheatsheet);
   const ai = b('spark', '', '', () => toggleAi());
   ai.id = 'aiStatus';
@@ -290,12 +351,12 @@ async function boot() {
   ]);
   $('#btnImport').innerHTML = `${icon('download')}<span class="bl">Import</span>`;
   $('#btnImport').onclick = importDialog;
-  $('#searchbox').innerHTML = `${icon('search')}<span>Search</span><span class="sp"></span><kbd>Ctrl</kbd><kbd>K</kbd>`;
+  $('#searchbox').innerHTML = `${icon('search')}<span>Find a request, switch theme, change environment…</span><span class="sp"></span><kbd>Ctrl K</kbd>`;
   $('#searchbox').onclick = search;
   $('#searchbox').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') search(); };
-  $('#envEye').innerHTML = icon('eye');
-  $('#envEye').onclick = envQuickLook;
-  $('#envSel').onchange = e => { W.activeEnv = e.target.value || null; saveW(); bus.emit('env'); };
+  $('#winctl').onclick = e => { const b = e.target.closest('[data-w]'); if (b) api.winCtl(b.dataset.w); };
+  $('header.top').ondblclick = e => { if (!e.target.closest('button,.searchbox,.themeseg')) api.winCtl('max'); };
+  document.fonts.ready.then(() => window.monaco?.editor.remeasureFonts());
   $('#btnSettings').innerHTML = icon('gear');
   $('#btnSettings').onclick = () => openSettings();
   $('#btnAi').innerHTML = `${icon('spark')}<span class="bl">Claude</span>`;
@@ -329,7 +390,10 @@ async function boot() {
   bus.on('cookies', openCookies);
   bus.on('save-active', () => saveTab());
   bus.on('env', () => { renderEnvSelect(); renderSidebar(); });
-  bus.on('vars', () => { for (const t of T.tabs) if (t.kind === 'env') rt(t).refresh?.(); renderEnvSelect(); });
+  bus.on('saved', t => { if (t?.kind === 'env') renderEnvSelect(); });
+  bus.on('env', renderStatus);
+  bus.on('sent', () => { clearTimeout(window.__stT); window.__stT = setTimeout(renderStatus, 300); });
+  bus.on('vars', () => { for (const t of T.tabs) if (t.kind === 'env') rt(t).refresh?.(); if (!document.activeElement?.closest('#envDock')) renderEnvSelect(); });
   bus.on('settings', () => { applyTheme(); renderStatus(); renderView(); });
   bus.on('workspace', () => { applyTheme(); renderEnvSelect(); renderTabs(); });
   bus.on('console-count', (n, err) => { consoleCount = n; consoleErr = n ? (consoleErr || err) : false; renderStatus(); });
@@ -372,7 +436,12 @@ function search() {
       { label: 'Toggle console', icon: 'terminal', kb: 'Ctrl+Alt+C', run: () => toggleConsole() },
       { label: 'Manage cookies', icon: 'cookie', run: openCookies },
       { label: 'Run a collection', icon: 'play', run: runnerPicker },
-      { label: 'Toggle theme (dark / light)', icon: 'moon', run: () => { W.settings.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; saveW(); applyTheme(); } },
+      { label: 'Toggle theme (dark / light)', icon: 'moon', run: () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') },
+      { label: 'Theme: Light', icon: 'sun', run: () => setTheme('light') },
+      { label: 'Theme: Dark', icon: 'moon', run: () => setTheme('dark') },
+      { label: 'Theme: Follow system', icon: 'monitor', run: () => setTheme('system') },
+      { label: 'Show / hide environment variables', icon: 'eye', run: () => { T.ui.envOpen = !T.ui.envOpen; saveT(); renderEnvSelect(); } },
+      { label: 'Variables in scope', icon: 'eye', run: envQuickLook },
       { label: 'Toggle two-pane view', icon: 'layout', kb: 'Ctrl+Alt+V', run: toggleLayout },
       { label: 'Keyboard shortcuts', icon: 'keyboard', kb: 'Ctrl+/', run: cheatsheet },
       { label: 'Ask Claude', icon: 'spark', run: () => toggleAi(true) },

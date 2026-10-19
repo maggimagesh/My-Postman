@@ -4,7 +4,7 @@ import { $, h, esc, icon, contextMenu, menuFor, ask, confirmDlg, toast, bus, uid
 import { openNode, openTab, newRequestTab, syncTabsWithTree, activeTab } from './tabs.js';
 import { toPostmanCollection, toPostmanEnv, toPostmanGlobals } from './importers.js';
 
-const SECTIONS = [['collections', 'Collections', 'collections'], ['environments', 'Environments', 'env'], ['history', 'History', 'history'], ['mocks', 'Mock Servers', 'server']];
+const SECTIONS = [['collections', 'Collections', 'collections', 'Collections'], ['history', 'History', 'history', 'History'], ['environments', 'Environments', 'env', 'Envs'], ['mocks', 'Mock Servers', 'server', 'Mocks']];
 let clipboard = null;
 let dragId = null;
 let mocksRunning = new Set();
@@ -12,15 +12,11 @@ let renaming = null;
 
 export function initSidebar() {
   const rail = $('#rail');
-  for (const [k, label, ic] of SECTIONS) {
-    const b = h(`<button data-s="${k}" title="${label}" aria-label="${label}">${icon(ic)}</button>`);
+  for (const [k, label, , short] of SECTIONS) {
+    const b = h(`<button data-s="${k}" title="${label}" aria-label="${label}">${short}</button>`);
     b.onclick = () => { if (T.ui.side === k && !T.ui.sideHidden) toggleSidebar(); else { T.ui.side = k; T.ui.sideHidden = false; applySideVisibility(); saveT(); renderSidebar(); } };
     rail.append(b);
   }
-  rail.append(h(`<span class="sp"></span>`));
-  const cookies = h(`<button title="Cookies" aria-label="Cookies">${icon('cookie')}</button>`);
-  cookies.onclick = () => bus.emit('cookies');
-  rail.append(cookies);
   $('#filter').oninput = () => renderSidebar();
   $('#filter').onkeydown = e => { if (e.key === 'ArrowDown') { e.preventDefault(); $('#tree').focus(); moveCursor(1); } if (e.key === 'Escape') { $('#filter').value = ''; renderSidebar(); $('#tree').focus(); } };
   $('#sideAdd').innerHTML = icon('plus');
@@ -64,6 +60,9 @@ export function renderSidebar() {
   tree.scrollTop = scroll;
 }
 
+// "{{base}}/users/:id?x=1" -> "/users/:id"
+const shortPath = url => { const u = String(url || '').split(/[?#]/)[0]; return u.replace(/^(\{\{[^}]+\}\}|[a-z]+:\/\/[^/]*)/i, '') || u; };
+
 function nodeRow({ id, depth, html, cls = '', title = '' }) {
   const el = h(`<div class="node ${cls}" data-id="${esc(id)}" role="treeitem" style="padding-left:${6 + depth * 14}px" title="${esc(title)}">${html}</div>`);
   if (T.ui.cursor === id) el.classList.add('cursor', 'sel');
@@ -86,7 +85,8 @@ function renderCollections(tree, f) {
       const open = n.open || !!f;
       if (isContainer(n)) {
         const isCol = n.kind === 'collection';
-        const el = nodeRow({ id: n.id, depth, cls: activeRef === n.id ? 'open-tab' : '', html: `<span class="chev">${icon(open ? 'chevD' : 'chevR')}</span>${icon(isCol ? 'collections' : 'folder')}<span class="nm">${esc(n.name)}</span><button class="ghost sm more" aria-label="More actions">${icon('more')}</button>` });
+        const count = flatRequests(n).length;
+        const el = nodeRow({ id: n.id, depth, cls: 'folder' + (activeRef === n.id ? ' open-tab' : ''), html: `<span class="chev">${icon(open ? 'chevD' : 'chevR')}</span>${isCol ? '' : icon('folder')}<span class="nm">${esc(n.name)}</span><span class="cnt">${count}</span><button class="ghost sm more" aria-label="More actions">${icon('more')}</button>` });
         wireRow(el, n);
         tree.append(el);
         if (open) {
@@ -97,7 +97,8 @@ function renderCollections(tree, f) {
         const hasEx = n.examples?.length;
         const exOpen = n.open && hasEx;
         const badge = kindBadge(n);
-        const el = nodeRow({ id: n.id, depth, cls: activeRef === n.id ? 'open-tab' : '', title: n.url || '', html: `<span class="chev">${hasEx ? icon(exOpen || f ? 'chevD' : 'chevR') : ''}</span><span class="m ${n.kind === 'http' || !n.kind ? esc(n.method) : 'k-' + n.kind}">${esc(badge)}</span><span class="nm">${esc(n.name)}</span><button class="ghost sm more" aria-label="More actions">${icon('more')}</button>` });
+        const mcls = n.kind === 'http' || !n.kind ? esc(n.method) : 'k-' + n.kind;
+        const el = nodeRow({ id: n.id, depth, cls: activeRef === n.id ? 'open-tab' : '', title: n.url || '', html: `<span class="chev">${hasEx ? icon(exOpen || f ? 'chevD' : 'chevR') : ''}</span><span class="mdot ${mcls}"></span><div class="two"><span class="nm">${esc(n.name)}</span><span class="sub"><b class="${mcls}">${esc(badge)}</b> ${esc(shortPath(n.url))}</span></div><button class="ghost sm more" aria-label="More actions">${icon('more')}</button>` });
         wireRow(el, n);
         tree.append(el);
         if (exOpen || (f && hasEx)) for (const ex of n.examples) {
@@ -440,7 +441,7 @@ function renderHistory(tree, f) {
     const label = d.toDateString() === new Date().toDateString() ? 'Today' : d.toDateString() === new Date(Date.now() - 864e5).toDateString() ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     if (label !== day) { day = label; tree.append(h(`<div class="dim" style="padding:10px 10px 2px;font-size:11px;text-transform:uppercase;letter-spacing:.6px">${label}</div>`)); }
     const st = String(x.status);
-    const row = nodeRow({ id: x.id, depth: 0, title: `${d.toLocaleTimeString()} · ${st}${x.time != null ? ' · ' + x.time + ' ms' : ''}`, html: `<span class="m ${esc(x.req.method || 'GET')}">${esc(kindBadge(x.req))}</span><span class="nm mono" style="font-size:12px">${esc(x.req.url || x.req.name)}</span><span class="s${st[0]}" style="font-size:11px">${esc(st)}</span><span data-del hidden></span>` });
+    const row = nodeRow({ id: x.id, depth: 0, cls: 'hist', title: `${x.req.url || ''}\n${d.toLocaleTimeString()} · ${st}${x.time != null ? ' · ' + x.time + ' ms' : ''}`, html: `<span class="hstat s${/^\d/.test(st) ? st[0] : 'err'}">${esc(/^\d+$/.test(st) ? st : 'ERR')}</span><div class="two"><span class="nm">${esc(x.req.name && !/^Untitled/.test(x.req.name) ? x.req.name : shortPath(x.req.url) || x.req.name)}</span><span class="sub"><b class="${esc(x.req.method || 'GET')}">${esc(kindBadge(x.req))}</b> ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${x.time != null ? ' · ' + x.time + ' ms' : ''}</span></div><span data-del hidden></span>` });
     const del = () => { W.history.splice(W.history.indexOf(x), 1); saveW(); renderSidebar(); };
     row.querySelector('[data-del]').onclick = del;
     row.onclick = () => { T.ui.cursor = x.id; openTab({ kind: 'request', draft: { ...clone(x.req), id: uid() } }); };
