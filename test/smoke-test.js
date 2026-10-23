@@ -47,7 +47,7 @@ async function servers() {
   const ioSrv = http.createServer();
   const io = new Server(ioSrv);
   io.on('connection', s => { s.on('ping-me', (data, ack) => { s.emit('pong-you', { got: data }); if (typeof ack === 'function') ack('acked'); }); });
-  const aedes = require('aedes')();
+  const aedes = await require('aedes').Aedes.createBroker();
   const mqttSrv = require('net').createServer(aedes.handle);
   const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address().port)));
   const port = await listen(srv), ioPort = await listen(ioSrv), mqttPort = await listen(mqttSrv);
