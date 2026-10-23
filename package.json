@@ -14,8 +14,8 @@
   "description": "Postman-style API client with Claude AI",
   "devDependencies": {
     "@grpc/reflection": "^1.0.4",
-    "aedes": "^0.51.3",
-    "electron": "^33.2.1",
+    "aedes": "^1.2.0",
+    "electron": "^45.0.0",
     "socket.io": "^4.8.4"
   },
   "productName": "My Postmaster",
