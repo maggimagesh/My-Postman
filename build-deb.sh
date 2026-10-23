@@ -8,6 +8,9 @@ P=build/pkg
 APP=$P/opt/my-postmaster/resources/app
 rm -rf build
 mkdir -p $P/DEBIAN $P/usr/bin $P/usr/share/applications
+# Electron 45+ no longer downloads its runtime on npm install (it fetches it lazily on first run),
+# so fetch it explicitly here. A no-op when node_modules/electron/dist is already present.
+node node_modules/electron/install.js
 mkdir -p $P/opt && cp -a node_modules/electron/dist $P/opt/my-postmaster
 mv $P/opt/my-postmaster/electron $P/opt/my-postmaster/my-postmaster
 rm -f $P/opt/my-postmaster/resources/default_app.asar
